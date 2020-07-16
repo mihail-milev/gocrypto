@@ -26,17 +26,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 package gocrypto
 
 import (
-	"fmt"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/aes"
 	"crypto/cipher"
-	"os"
+	"crypto/elliptic"
+	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"unsafe"
-	"errors"
 )
 
 const (
@@ -49,9 +49,9 @@ type PasswordReader struct {
 
 func (pr *PasswordReader) Read(p []byte) (n int, err error) {
 	count := 0
-  passlen := len(*(pr.password))
-	for i := 0; i < len(p); i+= passlen {
-		if i + passlen <= len(p) {
+	passlen := len(*(pr.password))
+	for i := 0; i < len(p); i += passlen {
+		if i+passlen <= len(p) {
 			copy(p[i:i+passlen], *(pr.password))
 			count += passlen
 		} else {
@@ -63,7 +63,7 @@ func (pr *PasswordReader) Read(p []byte) (n int, err error) {
 	return count, nil
 }
 
-func createPasswordReader(passwd *string) (*PasswordReader) {
+func createPasswordReader(passwd *string) *PasswordReader {
 	return &PasswordReader{password: passwd}
 }
 
@@ -102,28 +102,28 @@ func destroyBigInt(bi *big.Int) error {
 
 type Container struct {
 	privateKey *[]byte
-	publicKey *[]byte
+	publicKey  *[]byte
 }
 
 type ContainerCreateResult struct {
 	Container *Container
-	Result error
+	Result    error
 }
 
-func New(passwd *string) (*ContainerCreateResult) {
+func New(passwd *string) *ContainerCreateResult {
 	if passwd == nil {
 		return &ContainerCreateResult{Container: nil, Result: errors.New("Password pointer may not be nil")}
 	}
-  if len(*passwd) < 1 {
-    return &ContainerCreateResult{Container: nil, Result: errors.New("Password may not be empty")}
-  }
+	if len(*passwd) < 1 {
+		return &ContainerCreateResult{Container: nil, Result: errors.New("Password may not be empty")}
+	}
 	passReader := createPasswordReader(passwd)
 	privk, x, y, err := elliptic.GenerateKey(elliptic.P521(), passReader)
-  errd := destroyMemoryLocation(uintptr(unsafe.Pointer(passReader)), int(unsafe.Sizeof(passReader)))
+	errd := destroyMemoryLocation(uintptr(unsafe.Pointer(passReader)), int(unsafe.Sizeof(passReader)))
 	if errd != nil {
 		return &ContainerCreateResult{Container: nil, Result: errd}
 	}
-  if err != nil {
+	if err != nil {
 		return &ContainerCreateResult{Container: nil, Result: err}
 	}
 	pubk := elliptic.Marshal(elliptic.P521(), x, y)
@@ -157,9 +157,9 @@ func doStringWrap(item *string) *string {
 		return nil
 	}
 	outp := ""
-	og := int(math.Ceil(float64(len(*item)) / float64(WRAP_SIZE))) * WRAP_SIZE
-	for i := 0; i < og; i+=WRAP_SIZE {
-		if i + WRAP_SIZE <= len(*item) {
+	og := int(math.Ceil(float64(len(*item))/float64(WRAP_SIZE))) * WRAP_SIZE
+	for i := 0; i < og; i += WRAP_SIZE {
+		if i+WRAP_SIZE <= len(*item) {
 			outp += (*item)[i:i+WRAP_SIZE] + "\n"
 		} else {
 			delta := len(*item) - i
@@ -171,15 +171,15 @@ func doStringWrap(item *string) *string {
 
 func (c *Container) GetPublicKeyPem(identifier *string) string {
 	pemkey := base64.StdEncoding.EncodeToString(*(c.publicKey))
-  wrapped := doStringWrap(&pemkey)
-  pb := *(*[]byte)(unsafe.Pointer(&pemkey))
-  rand.Read(pb)
-  return "-----BEGIN EC PUBLIC KEY FOR " + *identifier + "-----\n" +
+	wrapped := doStringWrap(&pemkey)
+	pb := *(*[]byte)(unsafe.Pointer(&pemkey))
+	rand.Read(pb)
+	return "-----BEGIN EC PUBLIC KEY FOR " + *identifier + "-----\n" +
 		*wrapped +
 		"-----END EC PUBLIC KEY FOR " + *identifier + "-----"
 }
 
-func marshalFour(A, B, C, D *big.Int) (*[]byte) {
+func marshalFour(A, B, C, D *big.Int) *[]byte {
 	if A == nil || B == nil || C == nil || D == nil {
 		return nil
 	}
@@ -190,22 +190,22 @@ func marshalFour(A, B, C, D *big.Int) (*[]byte) {
 	if len(ab) > 255 || len(bb) > 255 || len(cb) > 255 || len(db) > 255 {
 		return nil
 	}
-	res := make([]byte, len(ab) + len(bb) + len(cb) + len(db) + 4)
-	if len(res) != len(ab) + len(bb) + len(cb) + len(db) + 4 {
+	res := make([]byte, len(ab)+len(bb)+len(cb)+len(db)+4)
+	if len(res) != len(ab)+len(bb)+len(cb)+len(db)+4 {
 		return nil
 	}
 	res[0] = byte(len(ab))
 	res[1] = byte(len(bb))
 	res[2] = byte(len(cb))
 	res[3] = byte(len(db))
-	copy(res[4:len(ab) + 4], ab)
-	copy(res[len(ab) + 4:len(ab) + len(bb) + 4], bb)
-	copy(res[len(ab) + len(bb) + 4:len(ab) + len(bb) + len(cb) + 4], cb)
-	copy(res[len(ab) + len(bb) + len(cb) + 4:], db)
-  rand.Read(ab)
-  rand.Read(bb)
-  rand.Read(cb)
-  rand.Read(db)
+	copy(res[4:len(ab)+4], ab)
+	copy(res[len(ab)+4:len(ab)+len(bb)+4], bb)
+	copy(res[len(ab)+len(bb)+4:len(ab)+len(bb)+len(cb)+4], cb)
+	copy(res[len(ab)+len(bb)+len(cb)+4:], db)
+	rand.Read(ab)
+	rand.Read(bb)
+	rand.Read(cb)
+	rand.Read(db)
 	return &res
 }
 
@@ -217,21 +217,21 @@ func unmarshalFour(marshaled *[]byte) (*big.Int, *big.Int, *big.Int, *big.Int) {
 	lenbb := (*marshaled)[1]
 	lencb := (*marshaled)[2]
 	lendb := (*marshaled)[3]
-	if len(*marshaled) < int(lenab) + int(lenbb) + int(lencb) + int(lendb) + 4 {
+	if len(*marshaled) < int(lenab)+int(lenbb)+int(lencb)+int(lendb)+4 {
 		return nil, nil, nil, nil
 	}
 	A := big.NewInt(0)
 	B := big.NewInt(0)
 	C := big.NewInt(0)
 	D := big.NewInt(0)
-	A.SetBytes((*marshaled)[4:lenab + 4])
-	B.SetBytes((*marshaled)[lenab + 4:lenab + lenbb + 4])
-	C.SetBytes((*marshaled)[lenab + lenbb + 4:lenab + lenbb + lencb + 4])
-	D.SetBytes((*marshaled)[lenab + lenbb + lencb + 4:])
+	A.SetBytes((*marshaled)[4 : lenab+4])
+	B.SetBytes((*marshaled)[lenab+4 : lenab+lenbb+4])
+	C.SetBytes((*marshaled)[lenab+lenbb+4 : lenab+lenbb+lencb+4])
+	D.SetBytes((*marshaled)[lenab+lenbb+lencb+4:])
 	return A, B, C, D
 }
 
-func (c *Container) AssymetricEncrypt(msg *[]byte) (*[]byte) {
+func (c *Container) AssymetricEncrypt(msg *[]byte) *[]byte {
 	if len(*msg) > 64 {
 		return nil
 	}
@@ -258,23 +258,23 @@ func (c *Container) AssymetricEncrypt(msg *[]byte) (*[]byte) {
 	destroyBigInt(y)
 	C1, C2 := elliptic.P521().Add(A1, A2, M1, M2)
 
-  destroyBigInt(A1)
-  destroyBigInt(A2)
-  destroyBigInt(M1)
-  destroyBigInt(M2)
-  destroyBigInt(M1n)
-  destroyBigInt(M1q)
+	destroyBigInt(A1)
+	destroyBigInt(A2)
+	destroyBigInt(M1)
+	destroyBigInt(M2)
+	destroyBigInt(M1n)
+	destroyBigInt(M1q)
 
 	// step 3: marshall and return
-  retval := marshalFour(K1, K2, C1, C2)
-  destroyBigInt(K1)
-  destroyBigInt(K2)
-  destroyBigInt(C1)
-  destroyBigInt(C2)
+	retval := marshalFour(K1, K2, C1, C2)
+	destroyBigInt(K1)
+	destroyBigInt(K2)
+	destroyBigInt(C1)
+	destroyBigInt(C2)
 	return retval
 }
 
-func (c *Container) AssymetricDecrypt(marshaled *[]byte) (*[]byte) {
+func (c *Container) AssymetricDecrypt(marshaled *[]byte) *[]byte {
 	if marshaled == nil {
 		return nil
 	}
@@ -288,16 +288,16 @@ func (c *Container) AssymetricDecrypt(marshaled *[]byte) (*[]byte) {
 	S1, S2 := elliptic.P521().ScalarMult(K1, K2, *(c.privateKey))
 	R1, _ := elliptic.P521().Add(C1, C2, S1, S2.Neg(S2))
 
-  destroyBigInt(K1)
-  destroyBigInt(K2)
-  destroyBigInt(C1)
-  destroyBigInt(C2)
-  destroyBigInt(S1)
-  destroyBigInt(S2)
+	destroyBigInt(K1)
+	destroyBigInt(K2)
+	destroyBigInt(C1)
+	destroyBigInt(C2)
+	destroyBigInt(S1)
+	destroyBigInt(S2)
 
 	// get final message
 	finmsg := R1.Bytes()
-  destroyBigInt(R1)
+	destroyBigInt(R1)
 	return &finmsg
 }
 
@@ -305,7 +305,7 @@ func (c *Container) SymmetricEncrypt(msg *[]byte) (*[]byte, *[]byte) {
 	if msg == nil {
 		return nil, nil
 	}
-	paddedsize := int(math.Ceil(float64(len(*msg)) / float64(aes.BlockSize)) * aes.BlockSize)
+	paddedsize := int(math.Ceil(float64(len(*msg))/float64(aes.BlockSize)) * aes.BlockSize)
 	paddedcont := make([]byte, paddedsize)
 	if len(paddedcont) != paddedsize {
 		return nil, nil
@@ -314,8 +314,8 @@ func (c *Container) SymmetricEncrypt(msg *[]byte) (*[]byte, *[]byte) {
 	for i := len(*msg); i < paddedsize; i++ {
 		paddedcont[i] = 0
 	}
-	encrypted := make([]byte, aes.BlockSize + paddedsize)
-	if len(encrypted) != aes.BlockSize + paddedsize {
+	encrypted := make([]byte, aes.BlockSize+paddedsize)
+	if len(encrypted) != aes.BlockSize+paddedsize {
 		return nil, nil
 	}
 	ivbytesread, err := rand.Read(encrypted[:aes.BlockSize])
@@ -344,7 +344,7 @@ func (c *Container) SymmetricDecrypt(key, encrypted *[]byte) {
 	if key == nil || encrypted == nil {
 		return //nil
 	}
-	if len(*key) != 32 || len(*encrypted) < aes.BlockSize + 1 || len(*encrypted) % aes.BlockSize != 0 {
+	if len(*key) != 32 || len(*encrypted) < aes.BlockSize+1 || len(*encrypted)%aes.BlockSize != 0 {
 		return //nil
 	}
 	cipherblock, err := aes.NewCipher(*key)
@@ -358,19 +358,19 @@ func (c *Container) SymmetricDecrypt(key, encrypted *[]byte) {
 func (c *Container) TestSymmetricEncryption(msg string) {
 	msgb := []byte(msg)
 	key, encrypted := c.SymmetricEncrypt(&msgb)
-  fmt.Printf("Test Symmetric Key Encryption - Halfway there: %s\n", string((*encrypted)[aes.BlockSize:]))
+	fmt.Printf("Test Symmetric Key Encryption - Halfway there: %s\n", string((*encrypted)[aes.BlockSize:]))
 	c.SymmetricDecrypt(key, encrypted)
 	fmt.Printf("Test Symmetric Key Encryption - Decrypted message is: %s\n", string((*encrypted)[aes.BlockSize:]))
-  fmt.Println("")
+	fmt.Println("")
 }
 
 func (c *Container) TestAssymetricEncryption(msg string) {
 	msgb := []byte(msg)
-  uid := "Bingo"
+	uid := "Bingo"
 	encres := c.AssymetricEncrypt(&msgb)
-  fmt.Println(c.GetPublicKeyPem(&uid))
-  fmt.Printf("Test Asymmetric Key Encryption - Halfway there: %s\n", string(*encres))
+	fmt.Println(c.GetPublicKeyPem(&uid))
+	fmt.Printf("Test Asymmetric Key Encryption - Halfway there: %s\n", string(*encres))
 	finmsg := c.AssymetricDecrypt(encres)
 	fmt.Printf("Test Asymmetric Key Encryption - The final message is: %s\n", *finmsg)
-  fmt.Println("")
+	fmt.Println("")
 }

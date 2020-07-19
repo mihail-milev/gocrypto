@@ -340,28 +340,24 @@ func (c *Container) SymmetricEncrypt(msg *[]byte) (*[]byte, *[]byte) {
 	return &key, &encrypted
 }
 
-func (c *Container) SymmetricDecrypt(key, encrypted *[]byte) {
-	if key == nil || encrypted == nil {
-		return //nil
+func (c *Container) SymmetricDecrypt(key, encrypted *[]byte) error {
+	if key == nil {
+		return errors.New("no key to decrypt with")
+	}
+	if encrypted == nil {
+		return errors.New("no ciphertext to decrypt")
 	}
 	if len(*key) != 32 || len(*encrypted) < aes.BlockSize+1 || len(*encrypted)%aes.BlockSize != 0 {
-		return //nil
+		return errors.New("encrypted text does not fit into block size")
 	}
 	cipherblock, err := aes.NewCipher(*key)
 	if err != nil {
-		return //nil
+		return errors.New("Couldn't create cipher")
 	}
 	mode := cipher.NewCBCDecrypter(cipherblock, (*encrypted)[:aes.BlockSize])
 	mode.CryptBlocks((*encrypted)[aes.BlockSize:], (*encrypted)[aes.BlockSize:])
-}
 
-func (c *Container) TestSymmetricEncryption(msg string) {
-	msgb := []byte(msg)
-	key, encrypted := c.SymmetricEncrypt(&msgb)
-	fmt.Printf("Test Symmetric Key Encryption - Halfway there: %s\n", string((*encrypted)[aes.BlockSize:]))
-	c.SymmetricDecrypt(key, encrypted)
-	fmt.Printf("Test Symmetric Key Encryption - Decrypted message is: %s\n", string((*encrypted)[aes.BlockSize:]))
-	fmt.Println("")
+	return nil
 }
 
 func (c *Container) TestAssymetricEncryption(msg string) {

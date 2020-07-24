@@ -53,3 +53,22 @@ func TestSymmetricEncryption(t *testing.T) {
 		t.Errorf("expected '%s' but got '%s'", msg, decrypted)
 	}
 }
+
+func TestAssymetricEncryption(t *testing.T) {
+	pwd := "isthissecure"
+	msg := "olla test"
+	msgb := []byte(msg)
+	uid := "Bingo"
+	sutWrapper := New(&pwd)
+	if sutWrapper.Result != nil {
+		panic("Could not create sut")
+	}
+	sut := sutWrapper.Container
+	encres := sut.AssymetricEncrypt(&msgb)
+	fmt.Println(sut.GetPublicKeyPem(&uid))
+	finmsgb := sut.AssymetricDecrypt(encres)
+	finmsg := string(*finmsgb)
+	if finmsg != msg {
+		t.Errorf("expected '%s' but got '%s'", msg, finmsg)
+	}
+}

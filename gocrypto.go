@@ -359,14 +359,3 @@ func (c *Container) SymmetricDecrypt(key, encrypted *[]byte) error {
 
 	return nil
 }
-
-func (c *Container) TestAssymetricEncryption(msg string) {
-	msgb := []byte(msg)
-	uid := "Bingo"
-	encres := c.AssymetricEncrypt(&msgb)
-	fmt.Println(c.GetPublicKeyPem(&uid))
-	fmt.Printf("Test Asymmetric Key Encryption - Halfway there: %s\n", string(*encres))
-	finmsg := c.AssymetricDecrypt(encres)
-	fmt.Printf("Test Asymmetric Key Encryption - The final message is: %s\n", *finmsg)
-	fmt.Println("")
-}
